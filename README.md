@@ -179,7 +179,7 @@ interactive helper in another terminal:
 ### Docker
 
 Download the release's `docker-compose.yml`, or use the copy in its archive.
-The default image is pinned to `docker.io/mimalef70/goomni:v2.4.1`;
+The default image is pinned to `docker.io/mimalef70/goomni:v2.4.1`. For the Sepehr deployment, copy [`.env.example`](.env.example), enable Eitaa and Rubika, and publish host port `127.0.0.1:1598` while keeping the container listener on `3000`; see the [Sepehr deployment guide](https://github.com/syedalirezatabatabaei-star/panel_sepehr/blob/main/DEPLOY_GOOMNI.md).
 `ghcr.io/mimalef70/goomni:v2.4.1` contains the same build. For a **new** installation:
 
 ```sh

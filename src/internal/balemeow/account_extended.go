@@ -577,7 +577,43 @@ func (c *Client) ResolvePhone(ctx context.Context, phone string) (domains.Peer, 
 		}
 	}
 	if len(matches) == 0 {
-		return domains.Peer{}, boundedError("PHONE_NOT_FOUND", "Bale did not return an exact accessible account for this phone after international and national searches", 404)
+		// SearchContacts is a fuzzy/search-index endpoint and may omit phone-only
+		// accounts. The official contact-import RPC is the provider-supported
+		// exact phone lookup path. It may add this number to the account's contacts,
+		// but is only attempted after all read-only spellings returned no identity.
+		phoneNumber, parseErr := strconv.ParseInt(normalized, 10, 64)
+		if parseErr != nil {
+			return domains.Peer{}, boundedError("INVALID_PHONE", "normalized phone number is invalid", 400)
+		}
+		data, importErr := c.rpc(ctx, accountUsersService, "ImportContacts", &wire.AccountImportRequest{
+			Phones: []*wire.AccountContactImport{{Phone: phoneNumber}},
+		})
+		if importErr != nil {
+			return domains.Peer{}, importErr
+		}
+		imported := &wire.AccountImportResponse{}
+		if decode(data, imported) != nil || len(imported.Users)+len(imported.Peers) > 4096 {
+			return domains.Peer{}, protocolError()
+		}
+		for _, u := range imported.Users {
+			if u == nil || u.Id == 0 {
+				return domains.Peer{}, protocolError()
+			}
+			if existing, ok := matches[u.Id]; !ok || (existing.AccessHash == 0 && u.AccessHash != 0) {
+				matches[u.Id] = &wire.PeerRef{Id: u.Id, AccessHash: u.AccessHash}
+			}
+		}
+		for _, p := range imported.Peers {
+			if p == nil || p.Id == 0 {
+				return domains.Peer{}, protocolError()
+			}
+			if existing, ok := matches[p.Id]; !ok || (existing.AccessHash == 0 && p.AccessHash != 0) {
+				matches[p.Id] = &wire.PeerRef{Id: p.Id, AccessHash: p.AccessHash}
+			}
+		}
+	}
+	if len(matches) == 0 {
+		return domains.Peer{}, boundedError("PHONE_NOT_FOUND", "Bale could not resolve this phone through search or exact contact import", 404)
 	}
 	if len(matches) > 1 {
 		return domains.Peer{}, boundedError("PHONE_AMBIGUOUS", "more than one account matched the exact phone", 409)

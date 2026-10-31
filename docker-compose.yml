@@ -11,7 +11,7 @@ services:
       dockerfile: docker/golang.Dockerfile
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${APP_PORT:-3000}:3000"
+      - "127.0.0.1:${APP_PORT:-1598}:3000"
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 3000
@@ -35,14 +35,14 @@ services:
       BALE_APP_ID: ${BALE_APP_ID:-0}
       BALE_API_KEY: ${BALE_API_KEY:-}
       BALE_API_VERSION: ${BALE_API_VERSION:-173855}
-      EITAA_ENABLED: ${EITAA_ENABLED:-false}
+      EITAA_ENABLED: ${EITAA_ENABLED:-true}
       EITAA_ENDPOINT: ${EITAA_ENDPOINT:-https://hasan.eitaa.ir/eitaa/}
       EITAA_UPLOAD_ENDPOINT: ${EITAA_UPLOAD_ENDPOINT:-https://alzheimer.eitaa.com/eitaa/}
       EITAA_DOWNLOAD_ENDPOINT: ${EITAA_DOWNLOAD_ENDPOINT:-https://mohsen.eitaa.com/eitaa/}
       EITAA_API_ID: ${EITAA_API_ID:-2496}
       EITAA_API_HASH: ${EITAA_API_HASH:-8da85b0d5bfe62527e5b244c209159c3}
       EITAA_POLL_INTERVAL: ${EITAA_POLL_INTERVAL:-5s}
-      RUBIKA_ENABLED: ${RUBIKA_ENABLED:-false}
+      RUBIKA_ENABLED: ${RUBIKA_ENABLED:-true}
       RUBIKA_DISCOVERY_ENDPOINT: ${RUBIKA_DISCOVERY_ENDPOINT:-https://getdcmess.iranlms.ir/}
       RUBIKA_API_ENDPOINT: ${RUBIKA_API_ENDPOINT:-}
       RUBIKA_SOCKET_ENDPOINT: ${RUBIKA_SOCKET_ENDPOINT:-}

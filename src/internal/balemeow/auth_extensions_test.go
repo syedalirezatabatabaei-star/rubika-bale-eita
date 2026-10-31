@@ -111,7 +111,7 @@ func TestStartPhoneAuthMatchesBaleWebClientDeviceAndSMSFields(t *testing.T) {
 			unknown = unknown[consumed:]
 		}
 		_, _ = w.Write(grpcFrame(0, marshal(t, &wire.StartPhoneAuthResponse{TransactionHash: "synthetic-tx"})))
-		_, _ = w.Write(grpcFrame(128, []byte("grpc-status: 0\\r\\n")))
+		_, _ = w.Write(grpcFrame(128, []byte("grpc-status: 0\r\n")))
 	}))
 	defer server.Close()
 	c := New(Options{GRPCEndpoint: server.URL, AppID: 4, APIKey: "synthetic"})

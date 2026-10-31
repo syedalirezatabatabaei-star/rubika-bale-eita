@@ -65,7 +65,10 @@ services:
       - ALL
     stop_grace_period: 30s
     networks:
-      - internal_net
+      internal_net:
+        aliases:
+          # Keep the hostname expected by the Sepehr panel backend.
+          - eita-rubika-bale
 networks:
   internal_net:
     external: true

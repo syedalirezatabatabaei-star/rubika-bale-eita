@@ -27,6 +27,39 @@ Use an explicit version tag or the digest from the release notes. The runtime is
 one non-root Go process with SQLite; Python, Node, a browser, Redis and PostgreSQL
 are not runtime requirements. License notices are included in the image.
 
+## Build from source with Docker Compose
+
+The source Dockerfile uses Docker Hub images for all build and runtime stages;
+it does not require access to `gcr.io`. The final runtime is Debian slim with
+only CA certificates added. The Go process still runs as UID/GID 65532, with a
+read-only root filesystem and dropped Linux capabilities.
+
+The Compose file deliberately joins the pre-existing `internal_net` network so
+the Sepehr panel can reach GoOmni at `http://eita-rubika-bale:3000`. Create the
+network once if it does not already exist:
+
+```sh
+docker network inspect internal_net >/dev/null 2>&1 || docker network create internal_net
+```
+
+For an existing installation, keep its current `.env`, `master.key`, database,
+media and named volume. Do not run `init` again and do not run `docker compose down -v`.
+
+Validate the Compose file and build/start the service:
+
+```sh
+docker compose config --quiet
+docker compose build --pull goomni
+docker compose up -d --no-build goomni
+docker compose ps
+docker compose logs --tail=100 goomni
+```
+
+The service also has the network alias `eita-rubika-bale` for compatibility with
+existing Sepehr panel configurations. The host port defaults to
+`127.0.0.1:1598`; container-to-container traffic should use the network alias
+and port 3000, not the host-published port.
+
 ## New installation
 
 Download [docker-compose.yml](https://raw.githubusercontent.com/mimalef70/goomni/v2.4.1/docker-compose.yml)
@@ -58,8 +91,7 @@ offering a feature. Public protocol changes can affect any unofficial adapter.
 the old service and make a full manual snapshot. Keep its original database,
 media, encryption key and actual Docker volume. Set `APP_DATA_VOLUME` to that
 volume and `APP_DATABASE` to its original container path, often
-`/app/storages/gobale.db`. Do not run `init` again. Never use
-`docker compose down -v` to upgrade.
+`/app/storages/gobale.db`. Do not rerun `init` or remove the old volume.
 
 GoOmni 2.4.1 upgrades schema 8 to 9 transactionally on startup, backfilling local
 conversation summaries. Allow time and temporary disk space for a large event

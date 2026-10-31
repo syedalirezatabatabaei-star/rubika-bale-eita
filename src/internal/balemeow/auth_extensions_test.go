@@ -119,3 +119,19 @@ func TestStartPhoneAuthMatchesBaleWebClientDeviceAndSMSFields(t *testing.T) {
 	if _, err := uuid.Parse(string(gotDeviceHash)); err != nil { t.Fatalf("device_hash must be ASCII UUID bytes, got %q", gotDeviceHash) }
 	if gotSendCodeType != 1 { t.Fatalf("send_code_type=%d, want SMS value 1", gotSendCodeType) }
 }
+
+
+func TestSafeGRPCMessageClassDoesNotExposeFreeFormText(t *testing.T) {
+	cases := map[string]string{
+		"PHONE_NUMBER_INVALID": "PHONE_NUMBER_INVALID",
+		"phone number invalid": "PHONE_NUMBER_INVALID",
+		"invalid phone number +989121234567": "UNCLASSIFIED",
+		"bad request token=secret": "UNCLASSIFIED",
+		"": "UNCLASSIFIED",
+	}
+	for input, want := range cases {
+		if got := safeGRPCMessageClass(input); got != want {
+			t.Errorf("safeGRPCMessageClass(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

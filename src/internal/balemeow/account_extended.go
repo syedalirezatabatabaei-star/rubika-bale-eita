@@ -508,8 +508,9 @@ func (c *Client) accountExtendedCall(ctx context.Context, op string, raw json.Ra
 	}
 }
 
-// ResolvePhone never imports contacts or assumes the first search hit is the
-// requested account. Only an exact provider-returned phone field is sufficient.
+// ResolvePhone tries the common international and national search spellings
+// used by Bale, but only accepts a provider-returned exact phone match. It does
+// not import contacts or infer an account from an approximate search result.
 func (c *Client) ResolvePhone(ctx context.Context, phone string) (domains.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
 	defer cancel()
@@ -517,53 +518,64 @@ func (c *Client) ResolvePhone(ctx context.Context, phone string) (domains.Peer, 
 	if err != nil {
 		return domains.Peer{}, err
 	}
-	data, err := c.readRPC(ctx, accountUsersService, "SearchContacts", &wire.ContactsSearchRequest{Request: "+" + normalized})
-	if err != nil {
-		return domains.Peer{}, err
+
+	queries := []string{"+" + normalized, normalized, "00" + normalized}
+	// Bale's contact search may index Iranian mobile numbers in domestic form
+	// even when the send API and account session use the international form.
+	if strings.HasPrefix(normalized, "98") && len(normalized) == 12 {
+		queries = append(queries, "0"+normalized[2:])
 	}
-	r := &wire.AccountSearchResponse{}
-	if decode(data, r) != nil || len(r.Users)+len(r.Peers) > 4096 {
-		return domains.Peer{}, protocolError()
-	}
-	var match *wire.PeerRef
-	for _, u := range r.Users {
-		if u == nil || u.Id == 0 || len(u.ContactInfo) > 64 {
+
+	matches := make(map[uint32]*wire.PeerRef)
+	for _, query := range queries {
+		data, callErr := c.readRPC(ctx, accountUsersService, "SearchContacts", &wire.ContactsSearchRequest{Request: query})
+		if callErr != nil {
+			return domains.Peer{}, callErr
+		}
+		r := &wire.AccountSearchResponse{}
+		if decode(data, r) != nil || len(r.Users)+len(r.Peers) > 4096 {
 			return domains.Peer{}, protocolError()
 		}
-		found := false
-		for _, v := range u.ContactInfo {
-			if v == nil {
+		for _, u := range r.Users {
+			if u == nil || u.Id == 0 || len(u.ContactInfo) > 64 {
 				return domains.Peer{}, protocolError()
 			}
-			if v.Type != 0 {
-				continue
-			}
-			for _, candidate := range []string{v.GetStringValue().GetValue(), strconv.FormatInt(v.GetLongValue().GetValue(), 10)} {
-				if len(candidate) > 64 {
+			found := false
+			for _, v := range u.ContactInfo {
+				if v == nil {
 					return domains.Peer{}, protocolError()
 				}
-				if n, e := normalizePhone(candidate); e == nil && n == normalized {
-					found = true
+				if v.Type != 0 {
+					continue
+				}
+				for _, candidate := range []string{v.GetStringValue().GetValue(), strconv.FormatInt(v.GetLongValue().GetValue(), 10)} {
+					if len(candidate) > 64 {
+						return domains.Peer{}, protocolError()
+					}
+					if n, e := normalizePhone(candidate); e == nil && n == normalized {
+						found = true
+					}
 				}
 			}
-		}
-		if found {
-			if match != nil && match.Id != u.Id {
-				return domains.Peer{}, boundedError("PHONE_AMBIGUOUS", "more than one account matched the exact phone", 409)
+			if found {
+				matches[u.Id] = &wire.PeerRef{Id: u.Id, AccessHash: u.AccessHash}
 			}
-			match = &wire.PeerRef{Id: u.Id, AccessHash: u.AccessHash}
+		}
+		for _, p := range r.Peers {
+			if p == nil || p.Id == 0 {
+				return domains.Peer{}, protocolError()
+			}
 		}
 	}
-	if match == nil {
-		return domains.Peer{}, boundedError("PHONE_NOT_FOUND", "provider did not return an exact accessible account for this phone", 404)
+	if len(matches) == 0 {
+		return domains.Peer{}, boundedError("PHONE_NOT_FOUND", "Bale did not return an exact accessible account for this phone after international and national searches", 404)
 	}
-	for _, p := range r.Peers {
-		if p == nil || p.Id == 0 {
-			return domains.Peer{}, protocolError()
-		}
-		if p.Id == match.Id {
-			match.AccessHash = p.AccessHash
-		}
+	if len(matches) > 1 {
+		return domains.Peer{}, boundedError("PHONE_AMBIGUOUS", "more than one account matched the exact phone", 409)
+	}
+	var match *wire.PeerRef
+	for _, value := range matches {
+		match = value
 	}
 	c.rememberRef("user", match)
 	return domains.Peer{Type: "user", ID: strconv.FormatUint(uint64(match.Id), 10)}, nil

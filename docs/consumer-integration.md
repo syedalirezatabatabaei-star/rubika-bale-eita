@@ -165,6 +165,35 @@ Choose webhook destinations in trusted backend configuration. An authenticated
 administrator can configure HTTP endpoints, including private destinations;
 untrusted end users must not gain arbitrary callback or gateway URL control.
 
+## Retire a connection when the consumer logs out
+
+A normal `POST /devices/{id}/logout` revokes the provider session and clears
+local credentials, but deliberately retains the immutable `account_id` binding.
+Do not reuse that device for a different phone/account. For a consumer that offers
+account switching, perform this sequence from its trusted backend:
+
+1. Stop admitting new consumer jobs for the selected provider connection and
+   cancel its queued local work. Keep other provider connections untouched.
+2. Call `POST /devices/{id}/logout` with the saved
+   `X-Device-Id` and `X-Device-Instance`. Treat
+   `REMOTE_LOGOUT_UNCONFIRMED` as an explicit warning: local credentials were
+   cleared, but the provider did not confirm remote revocation.
+3. Call `DELETE /devices/{id}` with the same immutable instance guard. This
+   retires the device alias, removes its local session, cancels queued operations
+   and schedules, marks in-flight sends as `unknown`, and cancels pending
+   webhook deliveries. Do not retry an uncertain send merely because its device
+   was retired.
+4. Remove the consumer's old device/instance/account mapping only after the
+   retirement response is confirmed. On the next login, provision a new alias
+   and a new, never-reused provisioning `Idempotency-Key`; persist the returned
+   `instance_id` before starting authentication.
+
+A deleted alias is not a reusable slot: provisioning-key replay after deletion
+returns `PROVISIONING_RETIRED`. A new connection requires a new alias and key.
+The device instance guard prevents a delayed request from acting on a replacement
+connection. Logout and retirement are scoped to one provider; never delete a
+different provider's device as part of the same user action.
+
 ## Preserve messenger peer identities
 
 Route with the returned `{type,id}` pair and the selected immutable connection.

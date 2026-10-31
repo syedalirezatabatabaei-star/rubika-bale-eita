@@ -11,7 +11,10 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.26.9@sha256:f1f0bcc2c524a3ced375fcb4d1ecb7aa371aa7070e112599aaca45cc02d0101b AS build
 WORKDIR /src
 COPY src/go.mod src/go.sum ./
-RUN go mod download
+# Allow builds in environments where proxy.golang.org is blocked (e.g. HTTP 403).
+# The pipe separator falls back on any proxy error, including 403 responses.
+ARG GOPROXY=https://goproxy.cn|https://goproxy.io|direct
+RUN GOPROXY="${GOPROXY}" go mod download
 COPY src/ ./
 COPY --from=ui /workspace/src/ui/web/dist ./ui/web/dist
 ARG TARGETOS=linux

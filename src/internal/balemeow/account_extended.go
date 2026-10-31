@@ -508,9 +508,11 @@ func (c *Client) accountExtendedCall(ctx context.Context, op string, raw json.Ra
 	}
 }
 
-// ResolvePhone tries the common international and national search spellings
-// used by Bale, but only accepts a provider-returned exact phone match. It does
-// not import contacts or infer an account from an approximate search result.
+// ResolvePhone searches the exact phone spellings supported by Bale. SearchContacts
+// may return the matching identity either as a user carrying ContactInfo or as a
+// user_peers reference. The query itself is the full phone number; multiple distinct
+// returned identities are rejected rather than choosing an arbitrary recipient.
+// This lookup does not import contacts.
 func (c *Client) ResolvePhone(ctx context.Context, phone string) (domains.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
 	defer cancel()
@@ -561,9 +563,16 @@ func (c *Client) ResolvePhone(ctx context.Context, phone string) (domains.Peer, 
 				matches[u.Id] = &wire.PeerRef{Id: u.Id, AccessHash: u.AccessHash}
 			}
 		}
+		// ContactsSearchResponse.user_peers (wire field 2) is a valid
+		// phone-search result too. The previous implementation validated these
+		// references but discarded them, then incorrectly returned PHONE_NOT_FOUND
+		// whenever the provider omitted ContactInfo from users.
 		for _, p := range r.Peers {
 			if p == nil || p.Id == 0 {
 				return domains.Peer{}, protocolError()
+			}
+			if existing, ok := matches[p.Id]; !ok || (existing.AccessHash == 0 && p.AccessHash != 0) {
+				matches[p.Id] = &wire.PeerRef{Id: p.Id, AccessHash: p.AccessHash}
 			}
 		}
 	}

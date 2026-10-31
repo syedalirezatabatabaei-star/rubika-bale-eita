@@ -35,7 +35,7 @@ only CA certificates added. The Go process still runs as UID/GID 65532, with a
 read-only root filesystem and dropped Linux capabilities.
 
 The Compose file deliberately joins the pre-existing `internal_net` network so
-the Sepehr panel can reach GoOmni at `http://eita-rubika-bale:3000`. Create the
+the Sepehr panel can reach GoOmni at `http://eita-rubika-bale:1598`. Create the
 network once if it does not already exist:
 
 ```sh
@@ -58,7 +58,7 @@ docker compose logs --tail=100 goomni
 The service also has the network alias `eita-rubika-bale` for compatibility with
 existing Sepehr panel configurations. The host port defaults to
 `127.0.0.1:1598`; container-to-container traffic should use the network alias
-and port 3000, not the host-published port.
+and port 1598, not the host-published port.
 
 ## New installation
 
@@ -76,7 +76,7 @@ docker compose up -d --no-build
 docker compose logs --tail=100 goomni
 ```
 
-Open `http://127.0.0.1:3000/ui/` and use the generated `APP_BASIC_AUTH`. Connect an
+Open `http://127.0.0.1:1598/ui/` and use the generated `APP_BASIC_AUTH`. Connect an
 account using its own phone/code/password flow. The credential is gateway-wide
 administration: keep it in your backend, never in an end user's browser.
 

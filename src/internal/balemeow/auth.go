@@ -9,9 +9,9 @@ import (
 	"errors"
 	"io"
 	"log"
-	"regexp"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -214,6 +214,8 @@ func (c *Client) unary(ctx context.Context, method string, message proto.Message
 	request.Header.Set("Accept", "application/grpc-web+proto")
 	request.Header.Set("X-Grpc-Web", "1")
 	request.Header.Set("Origin", c.opts.Origin)
+	// Match the browser User-Agent to the browser version advertised in metadata.
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
 	c.mu.Lock()
 	token := ""
 	if c.session != nil {

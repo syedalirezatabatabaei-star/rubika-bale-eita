@@ -64,6 +64,12 @@ services:
     cap_drop:
       - ALL
     stop_grace_period: 30s
+    networks:
+      - internal_net
+networks:
+  internal_net:
+    external: true
+    name: internal_net
 volumes:
   gateway-data:
     name: ${APP_DATA_VOLUME:-goomni-data}

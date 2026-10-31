@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/google/uuid"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,7 +18,6 @@ import (
 
 	"github.com/mimalef70/goomni/src/domains"
 	"github.com/mimalef70/goomni/src/internal/balemeow/wire"
-	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -46,18 +45,22 @@ func (c *Client) StartAuth(ctx context.Context, phone string) (domains.Challenge
 	c.mu.Unlock()
 	// Starting a fresh login must not inherit cookies from a revoked challenge.
 	c.clearCookies()
-	deviceID, err := uuid.NewRandom()
+	// Match the reference GoOmni client: device_hash is 16 raw random bytes,
+	// represented as hex only in the persisted challenge metadata.
+	hash, err := randomHex(16)
 	if err != nil {
 		return domains.Challenge{}, err
 	}
-	// Bale sends the UUID text as ASCII bytes in device_hash.
-	hash := deviceID.String()
+	hashBytes, err := hex.DecodeString(hash)
+	if err != nil {
+		return domains.Challenge{}, protocolError()
+	}
 	id, err := randomHex(16)
 	if err != nil {
 		return domains.Challenge{}, err
 	}
 	number, _ := strconv.ParseInt(normalized, 10, 64)
-	result, err := c.unary(ctx, "StartPhoneAuth", &wire.StartPhoneAuthRequest{PhoneNumber: number, AppId: int32(c.opts.AppID), ApiKey: c.opts.APIKey, DeviceHash: []byte(hash), DeviceTitle: c.opts.DeviceTitle})
+	result, err := c.unary(ctx, "StartPhoneAuth", &wire.StartPhoneAuthRequest{PhoneNumber: number, AppId: int32(c.opts.AppID), ApiKey: c.opts.APIKey, DeviceHash: hashBytes, DeviceTitle: c.opts.DeviceTitle})
 	if err != nil {
 		return domains.Challenge{}, err
 	}
@@ -188,11 +191,6 @@ func (c *Client) unary(ctx context.Context, method string, message proto.Message
 	data, err := proto.Marshal(message)
 	if err != nil {
 		return nil, protocolError()
-	}
-	if method == "StartPhoneAuth" {
-		// Official Bale web clients explicitly request SMS with protobuf field 9.
-		data = protowire.AppendTag(data, 9, protowire.VarintType)
-		data = protowire.AppendVarint(data, 1)
 	}
 	if int64(len(data)) > c.opts.MaxFrameBytes {
 		return nil, boundedError("FRAME_TOO_LARGE", "authentication request exceeds frame limit", 413)

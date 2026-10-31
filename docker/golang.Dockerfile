@@ -46,9 +46,9 @@ COPY --chown=65532:65532 LICENCE.txt THIRD_PARTY_NOTICES.md /app/
 COPY --chown=65532:65532 src/internal/eitaameow/schema/LICENSE /app/third_party/eitaa-schema-LICENSE
 COPY --chown=65532:65532 src/internal/rubikameow/LICENSE.reference /app/third_party/rubika-reference-LICENSE
 COPY --from=ui --chown=65532:65532 /workspace/src/ui/web/dist/THIRD_PARTY_NOTICES.txt /app/
-ENV APP_HOST=0.0.0.0 APP_PORT=3000 APP_DATABASE=/app/storages/goomni.db APP_MEDIA_ROOT=/app/storages/media
+ENV APP_HOST=0.0.0.0 APP_PORT=1598 APP_DATABASE=/app/storages/goomni.db APP_MEDIA_ROOT=/app/storages/media
 VOLUME ["/app/storages"]
-EXPOSE 3000
+EXPOSE 1598
 USER 65532:65532
 ENTRYPOINT ["/app/goomni"]
 CMD ["rest"]

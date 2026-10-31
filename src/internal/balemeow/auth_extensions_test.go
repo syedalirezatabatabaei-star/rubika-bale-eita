@@ -3,6 +3,10 @@ package balemeow
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 	"github.com/mimalef70/goomni/src/internal/balemeow/wire"
 	"google.golang.org/protobuf/encoding/protowire"
 	"net/http"
@@ -79,4 +83,39 @@ func TestOfficialPasswordPhraseThroughUnaryAuthFlow(t *testing.T) {
 	if codeOf(authProviderError(16, "password needed for login user-secret")) == "PASSWORD_REQUIRED" {
 		t.Fatal("untrusted arbitrary suffix accepted")
 	}
+}
+
+func TestStartPhoneAuthMatchesBaleWebClientDeviceAndSMSFields(t *testing.T) {
+	var gotDeviceHash []byte
+	var gotSendCodeType uint64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil || len(raw) < 5 || raw[0] != 0 { t.Fatalf("invalid gRPC-Web frame: %v", err) }
+		var req wire.StartPhoneAuthRequest
+		if err := proto.Unmarshal(raw[5:], &req); err != nil { t.Fatal(err) }
+		gotDeviceHash = append([]byte(nil), req.DeviceHash...)
+		unknown := req.ProtoReflect().GetUnknown()
+		for len(unknown) > 0 {
+			num, typ, n := protowire.ConsumeTag(unknown)
+			if n < 0 { t.Fatal(protowire.ParseError(n)) }
+			unknown = unknown[n:]
+			if num == 9 && typ == protowire.VarintType {
+				value, consumed := protowire.ConsumeVarint(unknown)
+				if consumed < 0 { t.Fatal(protowire.ParseError(consumed)) }
+				gotSendCodeType = value
+				unknown = unknown[consumed:]
+				continue
+			}
+			consumed := protowire.ConsumeFieldValue(num, typ, unknown)
+			if consumed < 0 { t.Fatal(protowire.ParseError(consumed)) }
+			unknown = unknown[consumed:]
+		}
+		_, _ = w.Write(grpcFrame(0, marshal(t, &wire.StartPhoneAuthResponse{TransactionHash: "synthetic-tx"})))
+		_, _ = w.Write(grpcFrame(128, []byte("grpc-status: 0\\r\\n")))
+	}))
+	defer server.Close()
+	c := New(Options{GRPCEndpoint: server.URL, AppID: 4, APIKey: "synthetic"})
+	if _, err := c.StartAuth(context.Background(), "09123456789"); err != nil { t.Fatal(err) }
+	if _, err := uuid.Parse(string(gotDeviceHash)); err != nil { t.Fatalf("device_hash must be ASCII UUID bytes, got %q", gotDeviceHash) }
+	if gotSendCodeType != 1 { t.Fatalf("send_code_type=%d, want SMS value 1", gotSendCodeType) }
 }

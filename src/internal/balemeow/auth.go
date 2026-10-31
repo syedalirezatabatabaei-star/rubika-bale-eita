@@ -227,10 +227,16 @@ func (c *Client) unary(ctx context.Context, method string, message proto.Message
 	}
 	response, err := c.opts.HTTPClient.Do(request)
 	if err != nil {
+		// Log only the Go error type: error strings may contain URLs or other
+		// request-specific details and must not be exposed in authentication logs.
+		log.Printf("Bale auth HTTP transport failed: method=%s endpoint_host=%s error_type=%T", method, base.Host, err)
 		return nil, boundedError("AUTH_REQUEST_FAILED", "authentication request failed; its remote outcome is unknown", 502)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		// Do not log the response body or headers wholesale; upstream error
+		// pages can contain request identifiers or other sensitive data.
+		log.Printf("Bale auth HTTP rejected: method=%s endpoint_host=%s http_status=%d content_type=%q", method, base.Host, response.StatusCode, response.Header.Get("Content-Type"))
 		return nil, boundedError("AUTH_HTTP_ERROR", "authentication endpoint returned an unexpected HTTP status", 502)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, c.opts.MaxFrameBytes+1))

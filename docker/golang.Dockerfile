@@ -19,7 +19,9 @@ ARG TARGETARCH
 RUN mkdir -p /runtime/storages && touch /runtime/storages/.keep
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -tags purego -trimpath -ldflags='-s -w' -o /goomni .
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+# Use Docker Hub's Debian image for the runtime instead of gcr.io/distroless.
+# This avoids requiring access to Google Container Registry during local builds.
+FROM debian:bookworm-slim
 ARG VERSION=2.4.1
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="GoOmni" \
@@ -29,6 +31,11 @@ LABEL org.opencontainers.image.title="GoOmni" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=build --chown=65532:65532 /goomni /app/goomni
 COPY --from=build --chown=65532:65532 /runtime/storages /app/storages

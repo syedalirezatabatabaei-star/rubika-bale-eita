@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
+	"regexp"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -258,6 +260,7 @@ func parseGRPCWeb(data []byte, headerStatus, headerMessage string) ([]byte, erro
 			return nil, protocolError()
 		}
 		if headerCode != 0 {
+			log.Printf("Bale auth RPC rejected: grpc_status=%d grpc_message_class=%s", headerCode, safeGRPCMessageClass(headerMessage))
 			return nil, authProviderError(int32(headerCode), headerMessage)
 		}
 	}
@@ -315,10 +318,26 @@ func parseGRPCWeb(data []byte, headerStatus, headerMessage string) ([]byte, erro
 		if e == nil {
 			message = decoded
 		}
+		log.Printf("Bale auth RPC rejected: grpc_status=%d grpc_message_class=%s", code, safeGRPCMessageClass(message))
 		return nil, authProviderError(int32(code), message)
 	}
 	if !seenData {
 		return nil, protocolError()
 	}
 	return payload, nil
+}
+
+
+// safeGRPCMessageClass logs only a bounded protocol-style error identifier.
+// Free-form provider text is deliberately excluded because it may contain PII.
+var grpcMessageClassPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
+
+func safeGRPCMessageClass(message string) string {
+	message = strings.ToUpper(strings.TrimSpace(message))
+	message = strings.ReplaceAll(message, " ", "_")
+	message = strings.ReplaceAll(message, "-", "_")
+	if grpcMessageClassPattern.MatchString(message) {
+		return message
+	}
+	return "UNCLASSIFIED"
 }
